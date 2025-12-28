@@ -24,15 +24,30 @@ def load_api_key():
     return open(CONFIG_FILE).read().strip() if os.path.exists(CONFIG_FILE) else ""
 
 def fal_image_size(resolution, aspect):
+    # For higher resolutions, use _hd variants
+    is_hd = resolution in ["1024", "2048", "4096"]
+    
+    if aspect == "auto":
+        return "square_hd" if is_hd else "square"
     if aspect == "1:1":
-        return "square_hd" if resolution == "1024" else "square"
+        return "square_hd" if is_hd else "square"
+    if aspect == "21:9":
+        return "landscape_16_9"  # Using 16:9 as closest match
     if aspect == "16:9":
         return "landscape_16_9"
     if aspect == "9:16":
         return "portrait_16_9"
     if aspect == "4:3":
         return "landscape_4_3"
+    if aspect == "3:2":
+        return "landscape_4_3"  # Using 4:3 as closest match
+    if aspect == "5:4":
+        return "square_hd" if is_hd else "square"
+    if aspect == "4:5":
+        return "portrait_4_3"
     if aspect == "3:4":
+        return "portrait_4_3"
+    if aspect == "2:3":
         return "portrait_4_3"
     return "square"
 
@@ -166,17 +181,17 @@ class App:
         row = ttk.Frame(settings)
         row.pack(anchor="w", padx=10, pady=5)
 
-        self.aspect = tk.StringVar(value="1:1")
+        self.aspect = tk.StringVar(value="auto")
         self.resolution = tk.StringVar(value="1024")
 
         ttk.Label(row, text="Aspect").pack(side="left")
         ttk.Combobox(row, textvariable=self.aspect,
-                     values=["1:1","16:9","9:16","4:3","3:4"],
+                     values=["auto","1:1","21:9","16:9","9:16","4:3","3:2","5:4","4:5","3:4","2:3"],
                      width=7, state="readonly").pack(side="left", padx=5)
 
         ttk.Label(row, text="Resolution").pack(side="left", padx=10)
         ttk.Combobox(row, textvariable=self.resolution,
-                     values=["512","1024"],
+                     values=["512","1024","2048","4096"],
                      width=6, state="readonly").pack(side="left")
 
         # REFERENCE IMAGES
