@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-import threading, asyncio, os, sys, base64, requests
+import threading, os, sys, requests
 import fal_client
+import json
 
 # ===================== PATH SAFE =====================
 def base_dir():
@@ -14,8 +15,6 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "images")
 CONFIG_FILE = os.path.join(BASE_DIR, "config.txt")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-MODEL = "fal-ai/flux/schnell"
-
 # ===================== HELPERS =====================
 def save_api_key(key):
     with open(CONFIG_FILE, "w") as f:
@@ -24,134 +23,204 @@ def save_api_key(key):
 def load_api_key():
     return open(CONFIG_FILE).read().strip() if os.path.exists(CONFIG_FILE) else ""
 
-def encode_images(paths):
-    return [base64.b64encode(open(p, "rb").read()).decode() for p in paths]
+def fal_image_size(resolution, aspect):
+    if aspect == "1:1":
+        return "square_hd" if resolution == "1024" else "square"
+    if aspect == "16:9":
+        return "landscape_16_9"
+    if aspect == "9:16":
+        return "portrait_16_9"
+    if aspect == "4:3":
+        return "landscape_4_3"
+    if aspect == "3:4":
+        return "portrait_4_3"
+    return "square"
 
-def image_size(res, ratio):
-    r = {"1:1": (1,1), "16:9": (16,9), "9:16": (9,16), "4:3": (4,3), "3:4": (3,4)}
-    w = int(res)
-    rw, rh = r[ratio]
-    return f"{w}x{int(w * rh / rw)}"
+# ===================== IMAGE UPLOAD =====================
+def upload_images(paths):
+    urls = []
+    for p in paths:
+        with open(p, "rb") as f:
+            data = f.read()
+        # fal_client.upload returns the URL directly as a string
+        url = fal_client.upload(data, content_type="image/png")
+        urls.append(url)
+    return urls
 
-# ===================== ASYNC =====================
-async def generate_one(prompt, idx, app):
+# ===================== GENERATION (FIXED WITH DEBUG) =====================
+def generate_one(prompt, idx, app):
     try:
-        args = {
-            "prompt": prompt,
-            "image_size": image_size(app.resolution.get(), app.aspect.get())
-        }
-        if app.images:
-            args["image_base64"] = encode_images(app.images)
+        model = app.model.get().strip()
+        args = {"prompt": prompt}
 
-        result = await fal_client.run_async(MODEL, arguments=args)
-        if "images" not in result:
-            raise Exception("No images returned (billing / API issue)")
+        if "edit" in model:
+            if not app.images:
+                raise Exception("Edit model requires reference images")
+            args["image_urls"] = upload_images(app.images)
+        else:
+            args["image_size"] = fal_image_size(
+                app.resolution.get(),
+                app.aspect.get()
+            )
 
-        url = result["images"][0]["url"]
-        img = requests.get(url, timeout=30).content
-        with open(os.path.join(OUTPUT_DIR, f"image_{idx+1}.png"), "wb") as f:
+        app.log(f"🔍 Calling API with model: {model}")
+        
+        # Call the API
+        result = fal_client.subscribe(model, arguments=args)
+        
+        # DEBUG: Show what we got back
+        app.log(f"📊 Response type: {type(result).__name__}")
+        app.log(f"📋 Response keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+        
+        # Try to extract URL
+        url = None
+        
+        # Method 1: Standard structure {"images": [{"url": "..."}]}
+        if isinstance(result, dict) and "images" in result:
+            images = result["images"]
+            if isinstance(images, list) and len(images) > 0:
+                first = images[0]
+                if isinstance(first, dict) and "url" in first:
+                    url = first["url"]
+                    app.log(f"✓ Found URL in images[0].url")
+                elif isinstance(first, str):
+                    url = first
+                    app.log(f"✓ Found URL as string in images[0]")
+        
+        # Method 2: Direct {"image": {"url": "..."}}
+        if not url and isinstance(result, dict) and "image" in result:
+            image = result["image"]
+            if isinstance(image, dict) and "url" in image:
+                url = image["url"]
+                app.log(f"✓ Found URL in image.url")
+            elif isinstance(image, str):
+                url = image
+                app.log(f"✓ Found URL as string in image")
+        
+        # Method 3: Direct URL
+        if not url and isinstance(result, dict) and "url" in result:
+            url = result["url"]
+            app.log(f"✓ Found direct URL")
+        
+        if not url:
+            # Show full response for debugging
+            app.log(f"❌ Could not find URL. Full response:")
+            app.log(f"   {json.dumps(result, indent=2)[:500]}")
+            raise Exception("Could not find image URL in response")
+
+        # Download and save
+        app.log(f"📥 Downloading from: {url[:80]}...")
+        img = requests.get(url, timeout=60).content
+        out = os.path.join(OUTPUT_DIR, f"image_{idx+1}.png")
+        with open(out, "wb") as f:
             f.write(img)
 
-        app.on_done()
+        app.log(f"✅ Saved: {os.path.basename(out)}")
+        app.on_done(True)
+
     except Exception as e:
-        app.log(f"❌ Prompt {idx+1}: {e}")
-        app.on_done()
+        import traceback
+        app.log(f"❌ Prompt {idx+1} error: {str(e)}")
+        app.log(f"   {traceback.format_exc()[:300]}")
+        app.on_done(False)
 
-async def run_all(prompts, app):
-    await asyncio.gather(*[generate_one(p, i, app) for i, p in enumerate(prompts)])
+# ===================== THREAD RUNNER =====================
+def run_all(prompts, app):
+    for i, prompt in enumerate(prompts):
+        generate_one(prompt, i, app)
 
-# ===================== APP =====================
+# ===================== GUI APP =====================
 class App:
     def __init__(self, root):
-        root.title("fal.ai Bulk Image Generator")
+        root.title("fal.ai Universal Image Generator")
         root.state("zoomed")
 
         self.images = []
-        self.prompts = []
         self.total = 0
         self.done = 0
 
-        # -------- CANVAS LAYOUT (FIXED) --------
-        canvas = tk.Canvas(root, highlightthickness=0)
-        canvas.pack(side="left", fill="both", expand=True)
+        main = ttk.Frame(root, padding=15)
+        main.pack(fill="both", expand=True)
 
-        scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
-        scrollbar.pack(side="right", fill="y")
+        ttk.Label(main, text="fal.ai Universal Image Generator",
+                  font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=10)
 
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        self.main = ttk.Frame(canvas)
-        window = canvas.create_window((0, 0), window=self.main, anchor="nw")
-
-        def resize(event):
-            canvas.itemconfig(window, width=event.width)
-
-        canvas.bind("<Configure>", resize)
-        self.main.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
-
-        self.main.columnconfigure(0, weight=1)
-
-        # -------- UI --------
-        def section(title):
-            f = ttk.LabelFrame(self.main, text=title, padding=12)
-            f.pack(fill="x", padx=20, pady=8)
-            return f
-
-        ttk.Label(self.main, text="fal.ai Bulk Image Generator",
-                  font=("Segoe UI", 18, "bold")).pack(anchor="w", padx=20, pady=10)
-
-        api = section("🔑 API Key")
+        # API KEY
+        api = ttk.LabelFrame(main, text="🔑 API Key")
+        api.pack(fill="x")
         self.api = ttk.Entry(api, show="*")
-        self.api.pack(fill="x")
+        self.api.pack(fill="x", padx=10, pady=5)
         self.api.insert(0, load_api_key())
 
-        settings = section("⚙️ Settings")
+        # MODEL
+        model_frame = ttk.LabelFrame(main, text="🧠 Model")
+        model_frame.pack(fill="x", pady=8)
+        self.model = ttk.Entry(model_frame)
+        self.model.pack(fill="x", padx=10, pady=5)
+        self.model.insert(0, "fal-ai/nano-banana-pro/edit")
+
+        # SETTINGS
+        settings = ttk.LabelFrame(main, text="⚙️ Settings")
+        settings.pack(fill="x", pady=8)
+
         row = ttk.Frame(settings)
-        row.pack(anchor="w")
+        row.pack(anchor="w", padx=10, pady=5)
+
         self.aspect = tk.StringVar(value="1:1")
         self.resolution = tk.StringVar(value="1024")
-        ttk.Label(row, text="Aspect Ratio").pack(side="left")
+
+        ttk.Label(row, text="Aspect").pack(side="left")
         ttk.Combobox(row, textvariable=self.aspect,
                      values=["1:1","16:9","9:16","4:3","3:4"],
-                     width=6, state="readonly").pack(side="left", padx=5)
+                     width=7, state="readonly").pack(side="left", padx=5)
+
         ttk.Label(row, text="Resolution").pack(side="left", padx=10)
         ttk.Combobox(row, textvariable=self.resolution,
-                     values=["512","1024","2048"],
+                     values=["512","1024"],
                      width=6, state="readonly").pack(side="left")
 
-        images = section("🖼 Reference Images (used for all prompts)")
-        ttk.Button(images, text="Add Images", command=self.add_images).pack(anchor="w")
-        self.image_list = ttk.Frame(images)
-        self.image_list.pack(fill="x", pady=5)
+        # REFERENCE IMAGES
+        img_frame = ttk.LabelFrame(main, text="🖼 Reference Images (edit models)")
+        img_frame.pack(fill="x", pady=8)
 
-        prompts = section("📝 Paste Prompts (one per line)")
-        self.text = tk.Text(prompts, height=6)
-        self.text.pack(fill="x")
+        ttk.Button(img_frame, text="Add Images",
+                   command=self.add_images).pack(anchor="w", padx=10)
 
-        ttk.Button(self.main, text="Generate Images", command=self.start)\
-            .pack(pady=10)
+        self.image_list = ttk.Frame(img_frame)
+        self.image_list.pack(fill="x", padx=10, pady=5)
 
-        self.progress_label = ttk.Label(self.main, text="0 / 0")
-        self.progress_label.pack(anchor="w", padx=20)
+        # PROMPTS
+        prompt_frame = ttk.LabelFrame(main, text="📝 Prompts")
+        prompt_frame.pack(fill="x", pady=8)
 
-        self.progress = ttk.Progressbar(self.main)
-        self.progress.pack(fill="x", padx=20)
+        self.text = tk.Text(prompt_frame, height=6)
+        self.text.pack(fill="x", padx=10, pady=5)
 
-        logs = section("📜 Logs")
-        self.logs = tk.Listbox(logs, height=8)
-        self.logs.pack(side="left", fill="both", expand=True)
-        ttk.Scrollbar(logs, command=self.logs.yview)\
-            .pack(side="right", fill="y")
-        self.logs.config(yscrollcommand=lambda *a: None)
+        ttk.Button(main, text="Generate Images",
+                   command=self.start).pack(pady=10)
 
-    # -------- LOGIC --------
+        self.progress_label = ttk.Label(main, text="0 / 0")
+        self.progress_label.pack(anchor="w")
+
+        self.progress = ttk.Progressbar(main)
+        self.progress.pack(fill="x")
+
+        logs = ttk.LabelFrame(main, text="📜 Logs")
+        logs.pack(fill="both", expand=True, pady=8)
+
+        self.logs = tk.Listbox(logs)
+        self.logs.pack(fill="both", expand=True)
+
+    # ===================== UI HELPERS =====================
     def log(self, msg):
         self.logs.insert(tk.END, msg)
         self.logs.yview(tk.END)
+        print(msg)  # Also print to console for debugging
 
     def add_images(self):
-        files = filedialog.askopenfilenames(filetypes=[("Images","*.png *.jpg *.jpeg")])
+        files = filedialog.askopenfilenames(
+            filetypes=[("Images", "*.png *.jpg *.jpeg")]
+        )
         for f in files:
             if f not in self.images:
                 self.images.append(f)
@@ -161,13 +230,11 @@ class App:
                 ttk.Button(row, text="❌",
                            command=lambda p=f, r=row: self.remove_image(p, r))\
                     .pack(side="right")
-        self.log(f"🖼 Images: {len(self.images)}")
+        self.log(f"🖼 Images selected: {len(self.images)}")
 
     def remove_image(self, path, row):
-        if path in self.images:
-            self.images.remove(path)
-            row.destroy()
-            self.log(f"🗑 Removed {os.path.basename(path)}")
+        self.images.remove(path)
+        row.destroy()
 
     def start(self):
         key = self.api.get().strip()
@@ -178,33 +245,37 @@ class App:
         save_api_key(key)
         os.environ["FAL_KEY"] = key
 
-        self.prompts = [p.strip() for p in self.text.get("1.0", tk.END).splitlines() if p.strip()]
-        if not self.prompts:
+        prompts = [
+            p.strip()
+            for p in self.text.get("1.0", tk.END).splitlines()
+            if p.strip()
+        ]
+
+        if not prompts:
             messagebox.showerror("Error", "No prompts provided")
             return
 
-        self.total = len(self.prompts)
+        self.total = len(prompts)
         self.done = 0
+
         self.progress["maximum"] = self.total
         self.progress["value"] = 0
         self.progress_label.config(text=f"0 / {self.total}")
 
+        self.log(f"🚀 Model: {self.model.get()}")
         self.log(f"🚀 Generating {self.total} images")
 
         threading.Thread(
-            target=lambda: asyncio.run(run_all(self.prompts, self)),
+            target=lambda: run_all(prompts, self),
             daemon=True
         ).start()
 
-    def on_done(self):
-        self.main.after(0, self.update)
-
-    def update(self):
+    def on_done(self, success):
         self.done += 1
         self.progress["value"] = self.done
         self.progress_label.config(text=f"{self.done} / {self.total}")
         if self.done == self.total:
-            self.log("🎉 Done")
+            self.log("🎉 Done!")
 
 # ===================== RUN =====================
 if __name__ == "__main__":
