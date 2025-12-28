@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import threading, os, sys, requests
 import fal_client
 import json
+from datetime import datetime
 
 # ===================== PATH SAFE =====================
 def base_dir():
@@ -126,7 +127,11 @@ def generate_one(prompt, idx, app):
         # Download and save
         app.log(f"📥 Downloading from: {url[:80]}...")
         img = requests.get(url, timeout=60).content
-        out = os.path.join(OUTPUT_DIR, f"image_{idx+1}.png")
+        
+        # Create unique filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out = os.path.join(OUTPUT_DIR, f"image_{timestamp}_{idx+1}.png")
+        
         with open(out, "wb") as f:
             f.write(img)
 
