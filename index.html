@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fal.ai Image Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="text"], input[type="password"], select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: monospace;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .logs {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e1e1e;
+            color: #00ff00;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px 0;
+        }
+
+        .log-success { color: #00ff00; }
+        .log-error { color: #ff4444; }
+        .log-info { color: #4da6ff; }
+        .log-warning { color: #ffaa00; }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .gallery-item:hover {
+            transform: scale(1.05);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .gallery-item .download-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .image-list {
+            margin-top: 10px;
+        }
+
+        .image-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+
+        .remove-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            display: none;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 12px;
+            background: white;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            background: #f0f4ff;
+            border-color: #764ba2;
+        }
+
+        @media (max-width: 768px) {
+            .settings-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 fal.ai Image Generator</h1>
+            <p>Generate stunning AI images with multiple prompts</p>
+        </div>
+
+        <div class="content">
+            <!-- API Key Section -->
+            <div class="section">
+                <div class="section-title">🔑 API Configuration</div>
+                <div class="form-group">
+                    <label for="apiKey">fal.ai API Key</label>
+                    <input type="password" id="apiKey" placeholder="Enter your fal.ai API key">
+                </div>
+                <div class="form-group">
+                    <label for="model">Model</label>
+                    <input type="text" id="model" value="fal-ai/nano-banana-pro/edit">
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div class="section">
+                <div class="section-title">⚙️ Settings</div>
+                <div class="settings-row">
+                    <div class="form-group">
+                        <label for="aspect">Aspect Ratio</label>
+                        <select id="aspect">
+                            <option value="auto">Auto</option>
+                            <option value="1:1">1:1 (Square)</option>
+                            <option value="21:9">21:9 (Ultra Wide)</option>
+                            <option value="16:9">16:9 (Wide)</option>
+                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="4:3">4:3 (Standard)</option>
+                            <option value="3:2">3:2 (Photo)</option>
+                            <option value="5:4">5:4 (Near Square)</option>
+                            <option value="4:5">4:5 (Portrait)</option>
+                            <option value="3:4">3:4 (Portrait)</option>
+                            <option value="2:3">2:3 (Photo Portrait)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="resolution">Resolution</label>
+                        <select id="resolution">
+                            <option value="512">512px</option>
+                            <option value="1024" selected>1K (1024px)</option>
+                            <option value="2048">2K (2048px)</option>
+                            <option value="4096">4K (4096px)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reference Images Section -->
+            <div class="section">
+                <div class="section-title">🖼️ Reference Images (for edit models)</div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" multiple accept="image/*">
+                    <label for="fileInput" class="file-input-label">
+                        📁 Click to add images
+                    </label>
+                </div>
+                <div class="image-list" id="imageList"></div>
+            </div>
+
+            <!-- Prompts Section -->
+            <div class="section">
+                <div class="section-title">📝 Prompts (one per line)</div>
+                <textarea id="prompts" placeholder="a cat sitting on a beach at sunset&#10;a futuristic city with flying cars&#10;a mountain landscape in winter"></textarea>
+            </div>
+
+            <!-- Generate Button -->
+            <button class="btn" id="generateBtn" onclick="generateImages()">
+                🚀 Generate Images
+            </button>
+
+            <!-- Progress Section -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+            </div>
+
+            <!-- Logs Section -->
+            <div class="logs" id="logs"></div>
+
+            <!-- Gallery Section -->
+            <div class="section" style="display: none;" id="gallerySection">
+                <div class="section-title">🎨 Generated Images</div>
+                <div class="gallery" id="gallery"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let referenceImages = [];
+        let totalImages = 0;
+        let completedImages = 0;
+
+        // File input handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    referenceImages.push(file);
+                    addImageToList(file);
+                }
+            });
+        });
+
+        function addImageToList(file) {
+            const imageList = document.getElementById('imageList');
+            const item = document.createElement('div');
+            item.className = 'image-item';
+            item.innerHTML = `
+                <span>${file.name}</span>
+                <button class="remove-btn" onclick="removeImage('${file.name}')">❌ Remove</button>
+            `;
+            imageList.appendChild(item);
+        }
+
+        function removeImage(fileName) {
+            referenceImages = referenceImages.filter(f => f.name !== fileName);
+            const imageList = document.getElementById('imageList');
+            imageList.innerHTML = '';
+            referenceImages.forEach(file => addImageToList(file));
+        }
+
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            logs.style.display = 'block';
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function updateProgress() {
+            const percent = Math.round((completedImages / totalImages) * 100);
+            const fill = document.getElementById('progressFill');
+            fill.style.width = percent + '%';
+            fill.textContent = `${completedImages} / ${totalImages}`;
+        }
+
+        function getImageSize(resolution, aspect) {
+            const isHD = ['1024', '2048', '4096'].includes(resolution);
+            
+            const mapping = {
+                'auto': isHD ? 'square_hd' : 'square',
+                '1:1': isHD ? 'square_hd' : 'square',
+                '21:9': 'landscape_16_9',
+                '16:9': 'landscape_16_9',
+                '9:16': 'portrait_16_9',
+                '4:3': 'landscape_4_3',
+                '3:2': 'landscape_4_3',
+                '5:4': isHD ? 'square_hd' : 'square',
+                '4:5': 'portrait_4_3',
+                '3:4': 'portrait_4_3',
+                '2:3': 'portrait_4_3'
+            };
+            
+            return mapping[aspect] || 'square';
+        }
+
+        async function uploadImage(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('https://fal.run/fal-ai/files/upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Key ${document.getElementById('apiKey').value}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            return data.file_url || data.url;
+        }
+
+        async function generateImage(prompt, index) {
+            try {
+                const apiKey = document.getElementById('apiKey').value;
+                const model = document.getElementById('model').value;
+                const aspect = document.getElementById('aspect').value;
+                const resolution = document.getElementById('resolution').value;
+
+                log(`🎨 Generating image ${index + 1}: "${prompt.substring(0, 50)}..."`, 'info');
+
+                const payload = {
+                    prompt: prompt
+                };
+
+                // Handle edit models with reference images
+                if (model.includes('edit') && referenceImages.length > 0) {
+                    log(`📤 Uploading reference images...`, 'info');
+                    const uploadedUrls = await Promise.all(
+                        referenceImages.map(file => uploadImage(file))
+                    );
+                    payload.image_urls = uploadedUrls;
+                } else {
+                    payload.image_size = getImageSize(resolution, aspect);
+                }
+
+                const response = await fetch(`https://queue.fal.run/${model}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Key ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ...payload
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const requestId = data.request_id;
+
+                // Poll for result
+                let result = await pollForResult(apiKey, model, requestId);
+
+                // Extract image URL
+                let imageUrl = null;
+                if (result.images && result.images.length > 0) {
+                    imageUrl = result.images[0].url;
+                } else if (result.image) {
+                    imageUrl = result.image.url;
+                } else if (result.url) {
+                    imageUrl = result.url;
+                }
+
+                if (!imageUrl) {
+                    throw new Error('Could not find image URL in response');
+                }
+
+                log(`✅ Image ${index + 1} generated successfully!`, 'success');
+                addToGallery(imageUrl, prompt, index);
+
+                completedImages++;
+                updateProgress();
+
+            } catch (error) {
+                log(`❌ Error generating image ${index + 1}: ${error.message}`, 'error');
+                completedImages++;
+                updateProgress();
+            }
+        }
+
+        async function pollForResult(apiKey, model, requestId) {
+            const maxAttempts = 60;
+            let attempts = 0;
+
+            while (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                const response = await fetch(`https://queue.fal.run/${model}/requests/${requestId}`, {
+                    headers: {
+                        'Authorization': `Key ${apiKey}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'COMPLETED') {
+                    return data.response || data;
+                } else if (data.status === 'FAILED') {
+                    throw new Error('Generation failed');
+                }
+
+                attempts++;
+            }
+
+            throw new Error('Timeout waiting for image generation');
+        }
+
+        function addToGallery(imageUrl, prompt, index) {
+            const gallery = document.getElementById('gallery');
+            const gallerySection = document.getElementById('gallerySection');
+            gallerySection.style.display = 'block';
+
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            item.innerHTML = `
+                <img src="${imageUrl}" alt="${prompt}">
+                <button class="download-btn" onclick="downloadImage('${imageUrl}', ${index})">
+                    ⬇️ Download
+                </button>
+            `;
+            gallery.appendChild(item);
+        }
+
+        function downloadImage(url, index) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `image_${Date.now()}_${index + 1}.png`;
+            a.click();
+        }
+
+        async function generateImages() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const prompts = document.getElementById('prompts').value
+                .split('\n')
+                .map(p => p.trim())
+                .filter(p => p);
+
+            if (!apiKey) {
+                alert('⚠️ Please enter your fal.ai API key');
+                return;
+            }
+
+            if (prompts.length === 0) {
+                alert('⚠️ Please enter at least one prompt');
+                return;
+            }
+
+            // Reset
+            totalImages = prompts.length;
+            completedImages = 0;
+            document.getElementById('gallery').innerHTML = '';
+            document.getElementById('logs').innerHTML = '';
+            document.getElementById('gallerySection').style.display = 'none';
+
+            // Show progress
+            document.getElementById('progressContainer').style.display = 'block';
+            updateProgress();
+
+            // Disable button
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.textContent = '🔄 Generating...';
+
+            log(`🚀 Starting generation of ${totalImages} images`, 'info');
+            log(`📊 Model: ${document.getElementById('model').value}`, 'info');
+
+            // Generate images sequentially
+            for (let i = 0; i < prompts.length; i++) {
+                await generateImage(prompts[i], i);
+            }
+
+            log('🎉 All images generated!', 'success');
+
+            // Re-enable button
+            btn.disabled = false;
+            btn.textContent = '🚀 Generate Images';
+        }
+    </script>
+</body>
+</html>
