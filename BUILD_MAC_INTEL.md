@@ -1,40 +1,36 @@
-# 🛠 Build macOS Intel Application from `app.py` (Local)
+# 🛠 Build and Install `app.py` on macOS Intel
 
-This guide explains how to convert **`app.py`** into a **macOS Intel `.app` application** on your own machine.
+This guide explains how to:
 
----
+1. Install and test the `app.py` locally  
+2. Convert it into a **macOS Intel application (`.app`)**
 
-## ✅ Requirements
-
-### Hardware
-- **Intel-based Mac** (x86_64)
-
-### Software
-- **macOS 11 (Big Sur) or newer**
-- **Python 3.10+** (recommended: 3.11)
-- **Internet connection**
+This documentation is tailored for Intel-based Macs (x86_64).
 
 ---
 
-## 🔎 Verify Intel Mac
+## ✅ Part 1 — Install and Run `app.py`
 
-Open Terminal and run:
+### 📋 Step 1: Clone the Repository
+
+If you haven’t already:
 
 ```bash
-uname -m
-```
-
-Expected output:
-
-```
-x86_64
+git clone https://github.com/vritik907/Fal.ai-automation.git
+cd Fal.ai-automation
 ```
 
 ---
 
-## 🐍 Install Python (if not installed)
+### 🐍 Step 2: Install Python (if not installed)
 
-### Option 1 – Homebrew (recommended)
+Check your Python version:
+
+```bash
+python3 --version
+```
+
+If Python 3.10+ is not installed:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -42,51 +38,74 @@ brew install python@3.11
 ```
 
 Verify:
+
 ```bash
 python3 --version
 ```
 
 ---
 
-## 📁 Project Structure
-
-```
-project/
-├── app.py
-├── requirements.txt   (optional)
-└── assets/            (optional)
-```
-
----
-
-## 📦 Create Virtual Environment (Recommended)
+### 🧪 Step 3: Create & Activate a Virtual Environment
 
 ```bash
-cd project
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 ---
 
-## 📥 Install Dependencies
+### 📥 Step 4: Install Dependencies
 
 ```bash
 pip install --upgrade pip
-pip install fal-client requests pyinstaller
+pip install fal-client requests
+```
+
+> If the repo includes `requirements.txt`, you can alternatively run:
+>
+> ```bash
+> pip install -r requirements.txt
+> ```
+
+---
+
+### ⚙️ Step 5: Configure API Key
+
+Open `app.py` and add your fal.ai API key where prompted or set it as an environment variable:
+
+```bash
+export FAL_KEY="your_api_key_here"
 ```
 
 ---
 
-## 🧪 Test App Before Building
+### ▶️ Step 6: Run the App
 
 ```bash
 python app.py
 ```
 
+Make sure the app opens and runs correctly before packaging.
+
 ---
 
-## 🏗 Build Intel macOS App
+## ✅ Part 2 — Build Intel macOS Application (.app)
+
+After confirming that `app.py` runs locally, follow these steps.
+
+---
+
+## 🏗 Step 1: Install PyInstaller
+
+```bash
+pip install pyinstaller
+```
+
+---
+
+## 🏗 Step 2: Build the App
+
+Run:
 
 ```bash
 pyinstaller \
@@ -96,9 +115,7 @@ pyinstaller \
   app.py
 ```
 
----
-
-## 📂 Output Location
+This will generate:
 
 ```
 dist/
@@ -107,13 +124,28 @@ dist/
 
 ---
 
-## 🚀 Run the App
+## 🚀 Step 3: Test the Built App
 
-Right-click → Open (first launch).
+Open it from Finder:
+
+```
+dist/fal.ai Image Generator.app
+```
+
+### ➤ First Launch Security
+
+If macOS shows a warning:
+
+➡️ Right-click (or Control-click) → **Open**  
+➡️ Click **Open** again
+
+This allows the unsigned app to run.
 
 ---
 
-## 🔐 Gatekeeper Fix (if needed)
+## 🔐 (Optional) Fix Gatekeeper
+
+If needed:
 
 ```bash
 xattr -rd com.apple.quarantine "/Applications/fal.ai Image Generator.app"
@@ -121,22 +153,41 @@ xattr -rd com.apple.quarantine "/Applications/fal.ai Image Generator.app"
 
 ---
 
-## ❌ Common Errors
+## 📌 Notes & Troubleshooting
 
-### App closes immediately
-Run from terminal:
+### ❓ App crashes immediately
+Run the executable from terminal to see logs:
+
 ```bash
-./dist/fal.ai\ Image\ Generator.app/Contents/MacOS/fal.ai\ Image\ Generator
+./dist/fal.ai\\ Image\\ Generator.app/Contents/MacOS/fal.ai\\ Image\\ Generator
 ```
 
 ---
 
-## ✅ Summary
-
-✔ Intel-native macOS app  
-✔ No Python needed for end users  
-✔ One-time security approval  
+### ❓ Python modules missing
+Make sure your virtual environment is activated when running PyInstaller.
 
 ---
 
-Happy building 🚀
+## 🧠 Summary
+
+You’ve now:
+
+1. Installed `app.py` locally
+2. Verified it runs
+3. Built a native macOS Intel application
+
+Enjoy your **standalone macOS build!**
+
+---
+
+## 📦 Optional Next Steps
+
+You can also:
+
+- Create a **DMG installer**
+- Add an application **icon**
+- Sign/Notarize the app with Apple
+- Build **Universal (Intel + ARM)** app
+
+If you want help with those, just ask! 🚀
