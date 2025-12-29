@@ -1,4 +1,4 @@
-name: Build macOS App
+name: Build Mac App
 
 on:
   push:
@@ -7,28 +7,56 @@ on:
 
 jobs:
   build-mac:
-    runs-on: macos-latest
-
+    runs-on: macos-13  # Use older macOS for better compatibility
+    
     steps:
     - uses: actions/checkout@v4
-
-    - name: Setup Python
+    
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
         pip install pyinstaller
-
-    - name: Build macOS App
+        pip install -r requirements.txt
+    
+    - name: Build Universal Mac app
       run: |
-        pyinstaller --onefile --windowed --name "fal.ai Bulk Image Generator" app.py
-
-    - name: Upload App
+        pyinstaller --name="fal.ai Image Generator" \
+          --windowed \
+          --onefile \
+          --target-arch universal2 \
+          --osx-bundle-identifier com.falai.imagegenerator \
+          --codesign-identity - \
+          app.py
+      env:
+        SYSTEM_VERSION_COMPAT: 0
+    
+    - name: Create DMG
+      run: |
+        brew install create-dmg
+        
+        create-dmg \
+          --volname "fal.ai Image Generator" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 100 \
+          --app-drop-link 450 185 \
+          "fal-ai-generator.dmg" \
+          "dist/fal.ai Image Generator.app" || true
+    
+    - name: Upload Mac App
       uses: actions/upload-artifact@v4
       with:
-        name: macOS-App
-        path: dist/*.app
+        name: mac-app
+        path: dist/fal.ai Image Generator.app
+    
+    - name: Upload DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-dmg
+        path: "*.dmg"
+        if-no-files-found: ignore
